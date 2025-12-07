@@ -357,11 +357,12 @@ function renderList(level, items, title) {
             });
         } else {
             // Use bookmark ID for unique cache-busting per bookmark
-            const iconUrl = getFaviconUrl(item.url, true, item.id);
+            // Add timestamp to ensure each render gets a fresh URL
+            const iconUrl = getFaviconUrl(item.url, true, `${item.id}-${Date.now()}`);
             const defaultIcon = 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E';
             li.innerHTML = `
                 <span class="drag-handle">☰</span>
-                <img src="${iconUrl}" alt="" class="bookmark-icon" data-bookmark-id="${item.id}" data-domain="${item.url}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy">
+                <img src="${iconUrl}" alt="" class="bookmark-icon" data-bookmark-id="${item.id}" data-domain="${item.url}" data-icon-url="${iconUrl}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy">
                 <a href="${item.url}" target="_blank">
                     <span>${item.name}</span>
                 </a>
