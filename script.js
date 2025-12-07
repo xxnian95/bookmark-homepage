@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     updateFileStatus();
+    
+    // Refresh all icons on page load
+    refreshAllIcons();
 });
 
 // Load bookmarks from localStorage
@@ -170,26 +173,77 @@ function getItemsByParent(parentId) {
 }
 
 // Get favicon URL for a bookmark
-function getFaviconUrl(url) {
+function getFaviconUrl(url, useCacheBust = true) {
     if (!url) return '';
     
     try {
         const urlObj = new URL(url);
         const domain = urlObj.hostname;
         
-        // Use Google's favicon service with cache-busting to ensure fresh icons
-        // Add domain hash to prevent caching issues
-        const domainHash = domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32&t=${domainHash}`;
+        // Use Google's favicon service
+        // Add timestamp for cache-busting if requested
+        const cacheBust = useCacheBust ? `&t=${Date.now()}` : '';
+        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32${cacheBust}`;
     } catch (e) {
         // If URL parsing fails, try to extract domain manually
         const match = url.match(/https?:\/\/([^\/]+)/);
         if (match) {
             const domain = match[1];
-            const domainHash = domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32&t=${domainHash}`;
+            const cacheBust = useCacheBust ? `&t=${Date.now()}` : '';
+            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32${cacheBust}`;
         }
         return '';
+    }
+}
+
+// Refresh all icons on the page
+async function refreshAllIcons() {
+    const bookmarkItems = bookmarks.filter(item => item.type === 'bookmark' && item.url);
+    
+    if (bookmarkItems.length === 0) return;
+    
+    // Refresh icons with a small delay between requests to avoid rate limiting
+    for (const item of bookmarkItems) {
+        await refreshIconForBookmark(item);
+        // Small delay between requests
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+}
+
+// Refresh icon for a specific bookmark
+async function refreshIconForBookmark(item) {
+    if (!item || !item.url) return;
+    
+    const newIconUrl = getFaviconUrl(item.url, true); // Use cache-busting
+    
+    // Find all icon elements for this bookmark
+    const iconElements = document.querySelectorAll(`img.bookmark-icon[data-domain="${item.url}"]`);
+    
+    if (iconElements.length === 0) return;
+    
+    // Test if the new icon URL loads successfully
+    try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        await new Promise((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error('Failed to load icon'));
+            img.src = newIconUrl;
+            
+            // Timeout after 3 seconds
+            setTimeout(() => reject(new Error('Timeout')), 3000);
+        });
+        
+        // If successful, update all matching icons
+        iconElements.forEach(imgEl => {
+            if (imgEl.src !== newIconUrl) {
+                imgEl.src = newIconUrl;
+            }
+        });
+    } catch (e) {
+        // Icon failed to load, keep the existing one
+        console.log(`Failed to refresh icon for ${item.url}:`, e.message);
     }
 }
 
