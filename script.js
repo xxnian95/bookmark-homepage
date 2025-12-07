@@ -783,6 +783,17 @@ async function saveBookmarkItem() {
     renderNavigation();
     renderBookmarkTree();
     document.getElementById('bookmarkModal').classList.remove('active');
+    
+    // Refresh icon for the newly added/edited bookmark
+    if (!isFolder) {
+        const bookmarkItem = editingItem || bookmarks[bookmarks.length - 1];
+        if (bookmarkItem && bookmarkItem.url) {
+            // Small delay to ensure DOM is updated
+            setTimeout(() => {
+                refreshIconForBookmark(bookmarkItem);
+            }, 100);
+        }
+    }
 }
 
 // Edit item
