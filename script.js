@@ -136,6 +136,27 @@ function setupEventListeners() {
         saveBookmarkItem();
     });
     
+    // Auto-fetch page title when URL is entered
+    const urlInput = document.getElementById('bookmarkUrl');
+    let titleFetchTimeout = null;
+    urlInput.addEventListener('input', (e) => {
+        const url = e.target.value.trim();
+        const nameInput = document.getElementById('bookmarkName');
+        
+        // Clear previous timeout
+        if (titleFetchTimeout) {
+            clearTimeout(titleFetchTimeout);
+        }
+        
+        // Only fetch if URL looks valid and name is empty
+        if (url && !nameInput.value.trim() && (url.startsWith('http://') || url.startsWith('https://'))) {
+            // Debounce: wait 500ms after user stops typing
+            titleFetchTimeout = setTimeout(() => {
+                fetchPageTitle(url, nameInput);
+            }, 500);
+        }
+    });
+    
     // Close modals on outside click
     window.addEventListener('click', (e) => {
         const manageModal = document.getElementById('manageModal');
@@ -637,20 +658,99 @@ function setupTreeDragAndDrop(element, item, level) {
     });
 }
 
+// Fetch page title from URL
+async function fetchPageTitle(url, nameInput) {
+    if (!url || !nameInput) return;
+    
+    try {
+        // Try to fetch the page title using a CORS proxy or direct fetch
+        // Since direct fetch may be blocked by CORS, we'll try multiple methods
+        
+        // Method 1: Try direct fetch (works for CORS-enabled sites)
+        try {
+            const response = await fetch(url, { 
+                method: 'GET',
+                mode: 'no-cors' // This won't give us the content, but we can try
+            });
+            // Direct fetch with CORS usually won't work, so we'll use method 2
+        } catch (e) {
+            // CORS blocked, use alternative method
+        }
+        
+        // Method 2: Use a CORS proxy service
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
+        
+        if (data && data.contents) {
+            // Parse the HTML to extract title
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(data.contents, 'text/html');
+            const title = doc.querySelector('title');
+            
+            if (title && title.textContent.trim()) {
+                // Only update if name field is still empty
+                if (!nameInput.value.trim()) {
+                    nameInput.value = title.textContent.trim();
+                }
+                return;
+            }
+        }
+    } catch (e) {
+        console.log('Could not fetch page title:', e);
+    }
+    
+    // Fallback: Extract domain name as title
+    try {
+        const urlObj = new URL(url);
+        const domain = urlObj.hostname.replace('www.', '');
+        // Capitalize first letter and use domain as fallback
+        if (!nameInput.value.trim()) {
+            nameInput.value = domain.charAt(0).toUpperCase() + domain.slice(1);
+        }
+    } catch (e) {
+        // If URL parsing fails, do nothing
+    }
+}
+
 // Save bookmark item
 async function saveBookmarkItem() {
-    const name = document.getElementById('bookmarkName').value.trim();
+    let name = document.getElementById('bookmarkName').value.trim();
     const url = document.getElementById('bookmarkUrl').value.trim();
     const parent = document.getElementById('bookmarkParent').value;
     const isFolder = document.getElementById('bookmarkModalTitle').textContent.includes('Folder');
     
-    if (!name) {
-        alert('Please enter a name');
+    if (!isFolder && !url) {
+        alert('Please enter a URL');
         return;
     }
     
-    if (!isFolder && !url) {
-        alert('Please enter a URL');
+    // If name is empty and we have a URL, try to fetch the page title
+    if (!isFolder && !name && url) {
+        // Show loading indicator
+        const nameInput = document.getElementById('bookmarkName');
+        nameInput.placeholder = 'Fetching page title...';
+        
+        await fetchPageTitle(url, nameInput);
+        name = nameInput.value.trim();
+        
+        // Reset placeholder
+        nameInput.placeholder = '';
+    }
+    
+    // If still no name, use URL domain as fallback
+    if (!name && !isFolder && url) {
+        try {
+            const urlObj = new URL(url);
+            name = urlObj.hostname.replace('www.', '');
+            name = name.charAt(0).toUpperCase() + name.slice(1);
+        } catch (e) {
+            name = 'Untitled Bookmark';
+        }
+    }
+    
+    if (!name) {
+        alert('Please enter a name');
         return;
     }
     
