@@ -194,7 +194,7 @@ function getItemsByParent(parentId) {
 }
 
 // Get favicon URL for a bookmark
-function getFaviconUrl(url, useCacheBust = true) {
+function getFaviconUrl(url, useCacheBust = true, uniqueId = null) {
     if (!url) return '';
     
     try {
@@ -202,16 +202,34 @@ function getFaviconUrl(url, useCacheBust = true) {
         const domain = urlObj.hostname;
         
         // Use Google's favicon service
-        // Add timestamp for cache-busting if requested
-        const cacheBust = useCacheBust ? `&t=${Date.now()}` : '';
-        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32${cacheBust}`;
+        // Create unique cache-busting parameter based on domain and optional unique ID
+        let cacheBust = '';
+        if (useCacheBust) {
+            if (uniqueId) {
+                // Use unique ID for consistent but unique cache-busting per bookmark
+                cacheBust = `&t=${uniqueId}`;
+            } else {
+                // Create hash from domain for consistent icon per domain
+                const domainHash = domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                cacheBust = `&t=${domainHash}`;
+            }
+        }
+        return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32${cacheBust}`;
     } catch (e) {
         // If URL parsing fails, try to extract domain manually
         const match = url.match(/https?:\/\/([^\/]+)/);
         if (match) {
             const domain = match[1];
-            const cacheBust = useCacheBust ? `&t=${Date.now()}` : '';
-            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32${cacheBust}`;
+            let cacheBust = '';
+            if (useCacheBust) {
+                if (uniqueId) {
+                    cacheBust = `&t=${uniqueId}`;
+                } else {
+                    const domainHash = domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                    cacheBust = `&t=${domainHash}`;
+                }
+            }
+            return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32${cacheBust}`;
         }
         return '';
     }
@@ -235,7 +253,7 @@ async function refreshAllIcons() {
 async function refreshIconForBookmark(item) {
     if (!item || !item.url) return;
     
-    // Use bookmark ID for unique cache-busting, plus timestamp for refresh
+    // Use bookmark ID + timestamp for unique cache-busting on refresh
     const newIconUrl = getFaviconUrl(item.url, true, `${item.id}-${Date.now()}`);
     
     // Find all icon elements for this bookmark by ID (more reliable than URL)
@@ -246,26 +264,51 @@ async function refreshIconForBookmark(item) {
     // Test if the new icon URL loads successfully
     try {
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        // Don't use crossOrigin for favicon service as it may cause CORS issues
+        img.crossOrigin = null;
         
         await new Promise((resolve, reject) => {
-            img.onload = () => resolve();
-            img.onerror = () => reject(new Error('Failed to load icon'));
+            let resolved = false;
+            img.onload = () => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve();
+                }
+            };
+            img.onerror = () => {
+                if (!resolved) {
+                    resolved = true;
+                    reject(new Error('Failed to load icon'));
+                }
+            };
             img.src = newIconUrl;
             
-            // Timeout after 3 seconds
-            setTimeout(() => reject(new Error('Timeout')), 3000);
+            // Timeout after 5 seconds
+            setTimeout(() => {
+                if (!resolved) {
+                    resolved = true;
+                    reject(new Error('Timeout'));
+                }
+            }, 5000);
         });
         
-        // If successful, update all matching icons
+        // If successful, update all matching icons with a fresh URL
         iconElements.forEach(imgEl => {
-            // Force update by setting src to empty first, then new URL
-            imgEl.src = '';
-            imgEl.src = newIconUrl;
+            // Create a completely new URL to force browser to reload
+            const freshUrl = newIconUrl + '&_=' + Date.now();
+            // Remove old src and set new one
+            imgEl.removeAttribute('src');
+            imgEl.setAttribute('src', freshUrl);
         });
     } catch (e) {
-        // Icon failed to load, keep the existing one
-        console.log(`Failed to refresh icon for ${item.url}:`, e.message);
+        // Icon failed to load, try to use the domain-based URL without timestamp
+        const fallbackUrl = getFaviconUrl(item.url, true, item.id);
+        iconElements.forEach(imgEl => {
+            if (imgEl.src !== fallbackUrl) {
+                imgEl.src = fallbackUrl;
+            }
+        });
+        console.log(`Failed to refresh icon for ${item.url}, using fallback:`, e.message);
     }
 }
 
