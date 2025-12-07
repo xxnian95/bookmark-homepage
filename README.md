@@ -5,29 +5,34 @@ A beautiful, customizable browser homepage with a hierarchical bookmark manageme
 ## Features
 
 ### 📚 Hierarchical Bookmark System
+
 - **3-level folder structure** - Organize bookmarks in nested folders up to 3 levels deep
 - **Visual navigation** - Navigate through folders with side-by-side panes
 - **Folder icons** - Easy visual identification of folders vs bookmarks
 
 ### 🎨 Modern UI
+
 - **Beautiful gradient design** - Modern, eye-catching interface
 - **Favicon display** - Automatic favicon loading for all bookmarks
 - **Responsive layout** - Works on different screen sizes
 - **Smooth animations** - Polished user experience
 
 ### 🖱️ Drag and Drop
+
 - **Reorder bookmarks** - Drag items to reorganize
 - **Move to folders** - Drag bookmarks into folders
 - **Visual feedback** - Clear indicators during drag operations
 - **Validation** - Prevents invalid moves (e.g., moving folder into itself)
 
 ### 💾 Local Storage
+
 - **Browser-based storage** - All bookmarks stored in browser's localStorage
 - **No server required** - Works completely offline
 - **Automatic saving** - Changes saved instantly
 - **Export/Import** - Backup and restore your bookmarks
 
 ### 🔧 Management Features
+
 - **Add/Edit/Delete** - Full CRUD operations for bookmarks and folders
 - **Tree view** - Visual tree representation in management modal
 - **Search-friendly** - Quick access to all your bookmarks
@@ -44,6 +49,7 @@ That's it! No build process or dependencies required.
 ### Setting as Browser Homepage
 
 #### Chrome/Edge
+
 1. Open Settings → On startup
 2. Select "Open a specific page or set of pages"
 3. Click "Add a new page"
@@ -51,6 +57,7 @@ That's it! No build process or dependencies required.
    - Or use: `file:///Users/yourname/codes/z-homepage/index.html`
 
 #### Firefox
+
 1. Open Preferences → Home
 2. Under "Homepage", select "Custom URLs"
 3. Enter the file path: `file:///path/to/index.html`
@@ -89,11 +96,13 @@ That's it! No build process or dependencies required.
 ### Export/Import
 
 #### Export Bookmarks
+
 1. Click **"Export"** button
 2. A JSON file (`bookmarks.json`) will be downloaded
 3. Save this file as a backup
 
 #### Import Bookmarks
+
 1. Click **"Import"** button
 2. Select a previously exported `bookmarks.json` file
 3. Confirm to replace existing bookmarks (if any)
@@ -157,6 +166,7 @@ Bookmarks are stored as JSON with the following structure:
 ### Favicon Service
 
 The application uses Google's favicon service to display website icons:
+
 - `https://www.google.com/s2/favicons?domain=example.com&sz=32`
 - Falls back to a default icon if favicon cannot be loaded
 
@@ -167,4 +177,3 @@ This project is open source and available for personal use.
 ## Contributing
 
 Feel free to fork, modify, and use this project for your own needs. Suggestions and improvements are welcome!
-
