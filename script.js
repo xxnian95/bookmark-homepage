@@ -81,11 +81,12 @@ function addDefaultBookmarks() {
 
 // Setup event listeners
 function setupEventListeners() {
-    // File management
-    document.getElementById('selectFileBtn').addEventListener('click', selectFile);
-    document.getElementById('saveFileBtn').addEventListener('click', saveToFile);
-    document.getElementById('downloadFileBtn').addEventListener('click', downloadFile);
-    document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+    // Export/Import
+    document.getElementById('exportBtn').addEventListener('click', exportBookmarks);
+    document.getElementById('importBtn').addEventListener('click', () => {
+        document.getElementById('fileInput').click();
+    });
+    document.getElementById('fileInput').addEventListener('change', handleFileImport);
     
     // Management modal
     document.getElementById('manageBtn').addEventListener('click', () => {
