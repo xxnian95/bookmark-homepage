@@ -177,13 +177,17 @@ function getFaviconUrl(url) {
         const urlObj = new URL(url);
         const domain = urlObj.hostname;
         
-        // Use Google's favicon service as primary method
-        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+        // Use Google's favicon service with cache-busting to ensure fresh icons
+        // Add domain hash to prevent caching issues
+        const domainHash = domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32&t=${domainHash}`;
     } catch (e) {
         // If URL parsing fails, try to extract domain manually
         const match = url.match(/https?:\/\/([^\/]+)/);
         if (match) {
-            return `https://www.google.com/s2/favicons?domain=${match[1]}&sz=32`;
+            const domain = match[1];
+            const domainHash = domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32&t=${domainHash}`;
         }
         return '';
     }
@@ -234,9 +238,10 @@ function renderList(level, items, title) {
             });
         } else {
             const iconUrl = getFaviconUrl(item.url);
+            const defaultIcon = 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E';
             li.innerHTML = `
                 <span class="drag-handle">☰</span>
-                <img src="${iconUrl}" alt="" class="bookmark-icon" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E'; this.onerror=null;">
+                <img src="${iconUrl}" alt="" class="bookmark-icon" data-domain="${item.url}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy">
                 <a href="${item.url}" target="_blank">
                     <span>${item.name}</span>
                 </a>
@@ -459,7 +464,8 @@ function renderBookmarkTree() {
                 content.innerHTML = `<span class="drag-handle">☰</span> <span class="folder-icon">📁</span> <strong>${item.name}</strong>`;
             } else {
                 const iconUrl = getFaviconUrl(item.url);
-                content.innerHTML = `<span class="drag-handle">☰</span> <img src="${iconUrl}" alt="" class="bookmark-icon" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E'; this.onerror=null;"> <a href="${item.url}" target="_blank">${item.name}</a>`;
+                const defaultIcon = 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E';
+                content.innerHTML = `<span class="drag-handle">☰</span> <img src="${iconUrl}" alt="" class="bookmark-icon" data-domain="${item.url}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy"> <a href="${item.url}" target="_blank">${item.name}</a>`;
             }
             
             const actions = document.createElement('div');
