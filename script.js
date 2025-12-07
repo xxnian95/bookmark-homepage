@@ -235,10 +235,11 @@ async function refreshAllIcons() {
 async function refreshIconForBookmark(item) {
     if (!item || !item.url) return;
     
-    const newIconUrl = getFaviconUrl(item.url, true); // Use cache-busting
+    // Use bookmark ID for unique cache-busting, plus timestamp for refresh
+    const newIconUrl = getFaviconUrl(item.url, true, `${item.id}-${Date.now()}`);
     
-    // Find all icon elements for this bookmark
-    const iconElements = document.querySelectorAll(`img.bookmark-icon[data-domain="${item.url}"]`);
+    // Find all icon elements for this bookmark by ID (more reliable than URL)
+    const iconElements = document.querySelectorAll(`img.bookmark-icon[data-bookmark-id="${item.id}"]`);
     
     if (iconElements.length === 0) return;
     
@@ -258,9 +259,9 @@ async function refreshIconForBookmark(item) {
         
         // If successful, update all matching icons
         iconElements.forEach(imgEl => {
-            if (imgEl.src !== newIconUrl) {
-                imgEl.src = newIconUrl;
-            }
+            // Force update by setting src to empty first, then new URL
+            imgEl.src = '';
+            imgEl.src = newIconUrl;
         });
     } catch (e) {
         // Icon failed to load, keep the existing one
@@ -312,11 +313,12 @@ function renderList(level, items, title) {
                 }
             });
         } else {
-            const iconUrl = getFaviconUrl(item.url);
+            // Use bookmark ID for unique cache-busting per bookmark
+            const iconUrl = getFaviconUrl(item.url, true, item.id);
             const defaultIcon = 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E';
             li.innerHTML = `
                 <span class="drag-handle">☰</span>
-                <img src="${iconUrl}" alt="" class="bookmark-icon" data-domain="${item.url}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy">
+                <img src="${iconUrl}" alt="" class="bookmark-icon" data-bookmark-id="${item.id}" data-domain="${item.url}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy">
                 <a href="${item.url}" target="_blank">
                     <span>${item.name}</span>
                 </a>
@@ -538,9 +540,9 @@ function renderBookmarkTree() {
             if (item.type === 'folder') {
                 content.innerHTML = `<span class="drag-handle">☰</span> <span class="folder-icon">📁</span> <strong>${item.name}</strong>`;
             } else {
-                const iconUrl = getFaviconUrl(item.url);
+                const iconUrl = getFaviconUrl(item.url, true, item.id);
                 const defaultIcon = 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E';
-                content.innerHTML = `<span class="drag-handle">☰</span> <img src="${iconUrl}" alt="" class="bookmark-icon" data-domain="${item.url}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy"> <a href="${item.url}" target="_blank">${item.name}</a>`;
+                content.innerHTML = `<span class="drag-handle">☰</span> <img src="${iconUrl}" alt="" class="bookmark-icon" data-bookmark-id="${item.id}" data-domain="${item.url}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy"> <a href="${item.url}" target="_blank">${item.name}</a>`;
             }
             
             const actions = document.createElement('div');
