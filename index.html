@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Homepage</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>My Homepage</h1>
+            <div class="header-actions">
+                <button id="exportBtn" class="manage-btn secondary">Export</button>
+                <button id="importBtn" class="manage-btn secondary">Import</button>
+                <input type="file" id="fileInput" accept=".json,.txt" style="display: none;">
+                <button id="manageBtn" class="manage-btn">Manage Bookmarks</button>
+            </div>
+        </header>
+        <div id="fileStatus" class="file-status"></div>
+        
+        <div class="main-content">
+            <!-- Navigation Panes (up to 3 levels) -->
+            <div class="nav-panes">
+                <div class="nav-pane" id="pane1" data-level="1">
+                    <h2>Bookmarks</h2>
+                    <ul class="bookmark-list" id="list1"></ul>
+                </div>
+                <div class="nav-pane" id="pane2" data-level="2" style="display: none;">
+                    <h2></h2>
+                    <ul class="bookmark-list" id="list2"></ul>
+                </div>
+                <div class="nav-pane" id="pane3" data-level="3" style="display: none;">
+                    <h2></h2>
+                    <ul class="bookmark-list" id="list3"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Management Modal -->
+    <div id="manageModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Manage Bookmarks</h2>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="manage-controls">
+                    <button id="addBookmarkBtn" class="action-btn">Add Bookmark</button>
+                    <button id="addFolderBtn" class="action-btn">Add Folder</button>
+                </div>
+                <div class="bookmark-tree" id="bookmarkTree"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Bookmark Modal -->
+    <div id="bookmarkModal" class="modal">
+        <div class="modal-content small">
+            <div class="modal-header">
+                <h2 id="bookmarkModalTitle">Add Bookmark</h2>
+                <button class="close-btn" id="closeBookmarkModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="bookmarkForm">
+                    <div class="form-group">
+                        <label for="bookmarkName">Name:</label>
+                        <input type="text" id="bookmarkName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="bookmarkUrl">URL:</label>
+                        <input type="url" id="bookmarkUrl" placeholder="https://example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="bookmarkParent">Parent Folder:</label>
+                        <select id="bookmarkParent">
+                            <option value="">Root</option>
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="action-btn primary">Save</button>
+                        <button type="button" class="action-btn" id="cancelBookmarkBtn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
