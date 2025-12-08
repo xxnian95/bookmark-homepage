@@ -18,9 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     updateFileStatus();
-    
-    // Refresh all icons on page load
-    refreshAllIcons();
 });
 
 // Load bookmarks from localStorage
@@ -208,125 +205,6 @@ function getItemsByParent(parentId) {
     return bookmarks.filter(item => item.parent === parentId);
 }
 
-// Get favicon URL for a bookmark
-function getFaviconUrl(url, useCacheBust = true, uniqueId = null) {
-    if (!url) return '';
-    
-    try {
-        const urlObj = new URL(url);
-        const domain = urlObj.hostname;
-        
-        // Use Google's favicon service
-        // Create unique cache-busting parameter based on domain and optional unique ID
-        let cacheBust = '';
-        if (useCacheBust) {
-            if (uniqueId) {
-                // Use unique ID for consistent but unique cache-busting per bookmark
-                cacheBust = `&t=${uniqueId}`;
-            } else {
-                // Create hash from domain for consistent icon per domain
-                const domainHash = domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                cacheBust = `&t=${domainHash}`;
-            }
-        }
-        return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32${cacheBust}`;
-    } catch (e) {
-        // If URL parsing fails, try to extract domain manually
-        const match = url.match(/https?:\/\/([^\/]+)/);
-        if (match) {
-            const domain = match[1];
-            let cacheBust = '';
-            if (useCacheBust) {
-                if (uniqueId) {
-                    cacheBust = `&t=${uniqueId}`;
-                } else {
-                    const domainHash = domain.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                    cacheBust = `&t=${domainHash}`;
-                }
-            }
-            return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32${cacheBust}`;
-        }
-        return '';
-    }
-}
-
-// Refresh all icons on the page
-async function refreshAllIcons() {
-    const bookmarkItems = bookmarks.filter(item => item.type === 'bookmark' && item.url);
-    
-    if (bookmarkItems.length === 0) return;
-    
-    // Refresh icons with a small delay between requests to avoid rate limiting
-    for (const item of bookmarkItems) {
-        await refreshIconForBookmark(item);
-        // Small delay between requests
-        await new Promise(resolve => setTimeout(resolve, 100));
-    }
-}
-
-// Refresh icon for a specific bookmark
-async function refreshIconForBookmark(item) {
-    if (!item || !item.url) return;
-    
-    // Use bookmark ID + timestamp for unique cache-busting on refresh
-    const newIconUrl = getFaviconUrl(item.url, true, `${item.id}-${Date.now()}`);
-    
-    // Find all icon elements for this bookmark by ID (more reliable than URL)
-    const iconElements = document.querySelectorAll(`img.bookmark-icon[data-bookmark-id="${item.id}"]`);
-    
-    if (iconElements.length === 0) return;
-    
-    // Test if the new icon URL loads successfully
-    try {
-        const img = new Image();
-        // Don't use crossOrigin for favicon service as it may cause CORS issues
-        img.crossOrigin = null;
-        
-        await new Promise((resolve, reject) => {
-            let resolved = false;
-            img.onload = () => {
-                if (!resolved) {
-                    resolved = true;
-                    resolve();
-                }
-            };
-            img.onerror = () => {
-                if (!resolved) {
-                    resolved = true;
-                    reject(new Error('Failed to load icon'));
-                }
-            };
-            img.src = newIconUrl;
-            
-            // Timeout after 5 seconds
-            setTimeout(() => {
-                if (!resolved) {
-                    resolved = true;
-                    reject(new Error('Timeout'));
-                }
-            }, 5000);
-        });
-        
-        // If successful, update all matching icons with a fresh URL
-        iconElements.forEach(imgEl => {
-            // Create a completely new URL to force browser to reload
-            const freshUrl = newIconUrl + '&_=' + Date.now();
-            // Remove old src and set new one
-            imgEl.removeAttribute('src');
-            imgEl.setAttribute('src', freshUrl);
-        });
-    } catch (e) {
-        // Icon failed to load, try to use the domain-based URL without timestamp
-        const fallbackUrl = getFaviconUrl(item.url, true, item.id);
-        iconElements.forEach(imgEl => {
-            if (imgEl.src !== fallbackUrl) {
-                imgEl.src = fallbackUrl;
-            }
-        });
-        console.log(`Failed to refresh icon for ${item.url}, using fallback:`, e.message);
-    }
-}
-
 // Render a list in a pane
 function renderList(level, items, title) {
     const list = document.getElementById(`list${level}`);
@@ -370,13 +248,10 @@ function renderList(level, items, title) {
                 }
             });
         } else {
-            // Use bookmark ID for unique cache-busting per bookmark
-            // Use only the bookmark ID (not timestamp) to ensure stable, unique icon per bookmark
-            const iconUrl = getFaviconUrl(item.url, true, item.id);
-            const defaultIcon = 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E';
+            // Use emoji icon for bookmarks
             li.innerHTML = `
                 <span class="drag-handle">☰</span>
-                <img src="${iconUrl}" alt="" class="bookmark-icon" data-bookmark-id="${item.id}" data-domain="${item.url}" data-icon-url="${iconUrl}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy">
+                <span class="bookmark-icon">🔗</span>
                 <a href="${item.url}" target="_blank">
                     <span>${item.name}</span>
                 </a>
@@ -597,9 +472,7 @@ function renderBookmarkTree() {
             if (item.type === 'folder') {
                 content.innerHTML = `<span class="drag-handle">☰</span> <span class="folder-icon">📁</span> <strong>${item.name}</strong>`;
             } else {
-                const iconUrl = getFaviconUrl(item.url, true, item.id);
-                const defaultIcon = 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E';
-                content.innerHTML = `<span class="drag-handle">☰</span> <img src="${iconUrl}" alt="" class="bookmark-icon" data-bookmark-id="${item.id}" data-domain="${item.url}" onerror="this.onerror=null; this.src='${defaultIcon}';" loading="lazy"> <a href="${item.url}" target="_blank">${item.name}</a>`;
+                content.innerHTML = `<span class="drag-handle">☰</span> <span class="bookmark-icon">🔗</span> <a href="${item.url}" target="_blank">${item.name}</a>`;
             }
             
             const actions = document.createElement('div');
@@ -841,17 +714,6 @@ async function saveBookmarkItem() {
     renderNavigation();
     renderBookmarkTree();
     document.getElementById('bookmarkModal').classList.remove('active');
-    
-    // Refresh icon for the newly added/edited bookmark
-    if (!isFolder) {
-        const bookmarkItem = editingItem || bookmarks[bookmarks.length - 1];
-        if (bookmarkItem && bookmarkItem.url) {
-            // Small delay to ensure DOM is updated
-            setTimeout(() => {
-                refreshIconForBookmark(bookmarkItem);
-            }, 100);
-        }
-    }
 }
 
 // Edit item
@@ -1038,11 +900,6 @@ async function handleFileImport(event) {
         bookmarks = importedBookmarks;
         saveBookmarks();
         renderNavigation();
-        
-        // Refresh icons for imported bookmarks
-        setTimeout(() => {
-            refreshAllIcons();
-        }, 500);
         
         showFileStatus(`Bookmarks imported successfully from ${file.name} (${importedBookmarks.length} items)`, 'success');
     } catch (e) {
