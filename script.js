@@ -883,6 +883,104 @@ function deleteItem(id) {
     renderBookmarkTree();
 }
 
+// Parse Chrome bookmarks HTML format
+function parseChromeBookmarks(htmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, 'text/html');
+    const result = [];
+    let idCounter = 1;
+    
+    // Helper function to generate unique ID
+    function generateId() {
+        return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${idCounter++}`;
+    }
+    
+    // Recursive function to process DL elements (folders)
+    function processDL(dlElement, parentId = '') {
+        if (!dlElement) return;
+        
+        const children = Array.from(dlElement.childNodes);
+        
+        for (let i = 0; i < children.length; i++) {
+            const node = children[i];
+            
+            // Skip text nodes and comments
+            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+            
+            // Process DT elements (can contain H3 for folders or A for bookmarks)
+            if (node.tagName === 'DT') {
+                const firstChild = node.firstElementChild;
+                
+                // Process folder (H3)
+                if (firstChild && firstChild.tagName === 'H3') {
+                    const h3 = firstChild;
+                    const folderName = h3.textContent.trim();
+                    
+                    if (folderName) {
+                        const folderId = generateId();
+                        const folder = {
+                            id: folderId,
+                            name: folderName,
+                            type: 'folder',
+                            parent: parentId || ''
+                        };
+                        result.push(folder);
+                        
+                        // Find the nested DL element (folder contents)
+                        // It can be a sibling of the H3 or a child of the DT
+                        let nestedDL = null;
+                        let nextSibling = h3.nextElementSibling;
+                        
+                        // Check if DL is a sibling of H3
+                        while (nextSibling) {
+                            if (nextSibling.tagName === 'DL') {
+                                nestedDL = nextSibling;
+                                break;
+                            }
+                            nextSibling = nextSibling.nextElementSibling;
+                        }
+                        
+                        // If not found as sibling, check children of DT
+                        if (!nestedDL) {
+                            nestedDL = node.querySelector('DL');
+                        }
+                        
+                        // Process nested DL (folder contents)
+                        if (nestedDL) {
+                            processDL(nestedDL, folderId);
+                        }
+                    }
+                }
+                // Process bookmark (A)
+                else if (firstChild && firstChild.tagName === 'A') {
+                    const a = firstChild;
+                    const url = a.getAttribute('HREF');
+                    const name = a.textContent.trim();
+                    
+                    if (url && name) {
+                        const bookmark = {
+                            id: generateId(),
+                            name: name,
+                            url: url,
+                            type: 'bookmark',
+                            parent: parentId || ''
+                        };
+                        result.push(bookmark);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Find the main DL element (usually inside body or directly in document)
+    const mainDL = doc.querySelector('DL') || doc.querySelector('body > DL');
+    if (mainDL) {
+        processDL(mainDL);
+    }
+    
+    return result;
+}
+
 // Import bookmarks from file
 async function handleFileImport(event) {
     const file = event.target.files[0];
@@ -890,11 +988,24 @@ async function handleFileImport(event) {
     
     try {
         const text = await file.text();
-        const importedBookmarks = JSON.parse(text);
+        let importedBookmarks = [];
         
-        // Validate the imported data
-        if (!Array.isArray(importedBookmarks)) {
-            throw new Error('Invalid bookmark file format');
+        // Detect file format and parse accordingly
+        if (file.name.endsWith('.html') || text.trim().startsWith('<!DOCTYPE') || text.includes('<DT>') || text.includes('<DL>')) {
+            // Chrome/Netscape bookmark HTML format
+            importedBookmarks = parseChromeBookmarks(text);
+            
+            if (importedBookmarks.length === 0) {
+                throw new Error('No bookmarks found in HTML file');
+            }
+        } else {
+            // JSON format
+            importedBookmarks = JSON.parse(text);
+            
+            // Validate the imported data
+            if (!Array.isArray(importedBookmarks)) {
+                throw new Error('Invalid bookmark file format');
+            }
         }
         
         // Ask for confirmation if there are existing bookmarks
@@ -908,10 +1019,16 @@ async function handleFileImport(event) {
         bookmarks = importedBookmarks;
         saveBookmarks();
         renderNavigation();
-        showFileStatus(`Bookmarks imported successfully from ${file.name}`, 'success');
+        
+        // Refresh icons for imported bookmarks
+        setTimeout(() => {
+            refreshAllIcons();
+        }, 500);
+        
+        showFileStatus(`Bookmarks imported successfully from ${file.name} (${importedBookmarks.length} items)`, 'success');
     } catch (e) {
         console.error('Error importing bookmarks:', e);
-        showFileStatus('Error importing bookmarks. Please check the file format.', 'error');
+        showFileStatus(`Error importing bookmarks: ${e.message}`, 'error');
     }
     
     // Reset input
