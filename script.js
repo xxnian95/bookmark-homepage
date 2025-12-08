@@ -357,8 +357,8 @@ function renderList(level, items, title) {
             });
         } else {
             // Use bookmark ID for unique cache-busting per bookmark
-            // Add timestamp to ensure each render gets a fresh URL
-            const iconUrl = getFaviconUrl(item.url, true, `${item.id}-${Date.now()}`);
+            // Use only the bookmark ID (not timestamp) to ensure stable, unique icon per bookmark
+            const iconUrl = getFaviconUrl(item.url, true, item.id);
             const defaultIcon = 'data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23999%27 d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z%27/%3E%3C/svg%3E';
             li.innerHTML = `
                 <span class="drag-handle">☰</span>
@@ -808,9 +808,10 @@ async function saveBookmarkItem() {
         }
         editingItem.parent = parent;
     } else {
-        // Create new item
+        // Create new item with unique ID
+        // Use timestamp + random number to ensure uniqueness even if multiple items are added quickly
         const newItem = {
-            id: Date.now().toString(),
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             name: name,
             type: isFolder ? 'folder' : 'bookmark',
             parent: parent || ''
