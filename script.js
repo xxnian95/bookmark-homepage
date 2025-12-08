@@ -187,27 +187,11 @@ function setupEventListeners() {
     
     // Bookmark modal
     document.getElementById('addBookmarkBtn').addEventListener('click', () => {
-        editingItem = null;
-        document.getElementById('bookmarkModalTitle').textContent = 'Add Bookmark';
-        document.getElementById('bookmarkForm').reset();
-        document.getElementById('bookmarkUrl').style.display = 'block';
-        document.querySelector('label[for="bookmarkUrl"]').style.display = 'block';
-        // Hide delete button when adding
-        document.getElementById('deleteBookmarkBtn').style.display = 'none';
-        populateParentSelect();
-        document.getElementById('bookmarkModal').classList.add('active');
+        openAddBookmarkModal('');
     });
     
     document.getElementById('addFolderBtn').addEventListener('click', () => {
-        editingItem = null;
-        document.getElementById('bookmarkModalTitle').textContent = 'Add Folder';
-        document.getElementById('bookmarkForm').reset();
-        document.getElementById('bookmarkUrl').style.display = 'none';
-        document.querySelector('label[for="bookmarkUrl"]').style.display = 'none';
-        // Hide delete button when adding
-        document.getElementById('deleteBookmarkBtn').style.display = 'none';
-        populateParentSelect();
-        document.getElementById('bookmarkModal').classList.add('active');
+        openAddFolderModal('');
     });
     
     document.getElementById('closeBookmarkModal').addEventListener('click', () => {
@@ -583,6 +567,27 @@ function renderList(level, items, title) {
         setupDragAndDrop(li, item, level);
         list.appendChild(li);
     });
+    
+    // Add "+" button at the bottom of the list (only when not searching)
+    if (!searchQuery) {
+        const addButtonLi = document.createElement('li');
+        addButtonLi.className = 'add-bookmark-button-container';
+        addButtonLi.innerHTML = `
+            <button class="add-bookmark-btn" data-level="${level}" data-parent-id="${listParentId}" title="Add bookmark to this folder">
+                <span class="add-icon">➕</span>
+            </button>
+        `;
+        
+        // Add click handler
+        const addBtn = addButtonLi.querySelector('.add-bookmark-btn');
+        addBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const parentId = addBtn.dataset.parentId || '';
+            openAddBookmarkModal(parentId);
+        });
+        
+        list.appendChild(addButtonLi);
+    }
 }
 
 // Get current parent ID for a level
@@ -1044,7 +1049,7 @@ function restoreNavigationState() {
 }
 
 // Populate parent select dropdown
-function populateParentSelect() {
+function populateParentSelect(preSelectedParentId = '') {
     const select = document.getElementById('bookmarkParent');
     select.innerHTML = '<option value="">Root</option>';
     
@@ -1072,10 +1077,38 @@ function populateParentSelect() {
     const rootFolders = getItemsByParent('').filter(item => item.type === 'folder');
     addFolderOptions(rootFolders);
     
-    // Set current parent if editing
+    // Set current parent if editing, otherwise use pre-selected parent
     if (editingItem) {
         select.value = editingItem.parent || '';
+    } else if (preSelectedParentId) {
+        select.value = preSelectedParentId;
     }
+}
+
+// Open add bookmark modal with pre-selected parent
+function openAddBookmarkModal(parentId = '') {
+    editingItem = null;
+    document.getElementById('bookmarkModalTitle').textContent = 'Add Bookmark';
+    document.getElementById('bookmarkForm').reset();
+    document.getElementById('bookmarkUrl').style.display = 'block';
+    document.querySelector('label[for="bookmarkUrl"]').style.display = 'block';
+    // Hide delete button when adding
+    document.getElementById('deleteBookmarkBtn').style.display = 'none';
+    populateParentSelect(parentId);
+    document.getElementById('bookmarkModal').classList.add('active');
+}
+
+// Open add folder modal with pre-selected parent
+function openAddFolderModal(parentId = '') {
+    editingItem = null;
+    document.getElementById('bookmarkModalTitle').textContent = 'Add Folder';
+    document.getElementById('bookmarkForm').reset();
+    document.getElementById('bookmarkUrl').style.display = 'none';
+    document.querySelector('label[for="bookmarkUrl"]').style.display = 'none';
+    // Hide delete button when adding
+    document.getElementById('deleteBookmarkBtn').style.display = 'none';
+    populateParentSelect(parentId);
+    document.getElementById('bookmarkModal').classList.add('active');
 }
 
 // Check if an item is a descendant of another

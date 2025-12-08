@@ -272,6 +272,46 @@ h1 {
     z-index: 10;
 }
 
+/* Add bookmark button at bottom of list */
+.add-bookmark-button-container {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.add-bookmark-btn {
+    width: 100%;
+    padding: calc(var(--bookmark-item-gap, 8px) * 0.75) 0;
+    background: transparent;
+    border: 2px dashed #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    margin-top: var(--bookmark-item-gap, 8px);
+    color: #666;
+    font-size: calc(var(--bookmark-font-size, 16px) * 1.2);
+}
+
+.add-bookmark-btn:hover {
+    border-color: #4a90e2;
+    background-color: #f0f7ff;
+    color: #4a90e2;
+}
+
+.add-bookmark-btn:active {
+    transform: scale(0.98);
+}
+
+.add-icon {
+    font-size: calc(var(--bookmark-font-size, 16px) * 1.5);
+    line-height: 1;
+}
+
 .drag-handle {
     cursor: grab;
     color: #999;
