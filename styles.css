@@ -295,6 +295,23 @@ h1 {
     color: #667eea;
 }
 
+.bookmark-item .actions .edit-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    transition: background 0.2s, transform 0.1s;
+    opacity: 0.7;
+}
+
+.bookmark-item .actions .edit-icon-btn:hover {
+    background: #f0f0f0;
+    opacity: 1;
+    transform: scale(1.1);
+}
+
 .bookmark-item .actions .delete-btn {
     color: #dc3545;
 }
@@ -412,6 +429,15 @@ h1 {
     background: #218838;
 }
 
+.action-btn.delete {
+    background: #dc3545;
+    color: white;
+}
+
+.action-btn.delete:hover {
+    background: #c82333;
+}
+
 .bookmark-tree {
     margin-top: 20px;
 }
@@ -519,6 +545,9 @@ h1 {
 }
 
 .form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
     display: flex;
     gap: 10px;
     justify-content: flex-end;

@@ -108,6 +108,8 @@ function setupEventListeners() {
         document.getElementById('bookmarkForm').reset();
         document.getElementById('bookmarkUrl').style.display = 'block';
         document.querySelector('label[for="bookmarkUrl"]').style.display = 'block';
+        // Hide delete button when adding
+        document.getElementById('deleteBookmarkBtn').style.display = 'none';
         populateParentSelect();
         document.getElementById('bookmarkModal').classList.add('active');
     });
@@ -118,6 +120,8 @@ function setupEventListeners() {
         document.getElementById('bookmarkForm').reset();
         document.getElementById('bookmarkUrl').style.display = 'none';
         document.querySelector('label[for="bookmarkUrl"]').style.display = 'none';
+        // Hide delete button when adding
+        document.getElementById('deleteBookmarkBtn').style.display = 'none';
         populateParentSelect();
         document.getElementById('bookmarkModal').classList.add('active');
     });
@@ -128,6 +132,17 @@ function setupEventListeners() {
     
     document.getElementById('cancelBookmarkBtn').addEventListener('click', () => {
         document.getElementById('bookmarkModal').classList.remove('active');
+    });
+    
+    // Delete button in edit modal
+    document.getElementById('deleteBookmarkBtn').addEventListener('click', () => {
+        if (editingItem) {
+            if (confirm('Are you sure you want to delete this item? This will also delete all its children.')) {
+                const itemId = editingItem.id;
+                document.getElementById('bookmarkModal').classList.remove('active');
+                deleteItem(itemId, true);
+            }
+        }
     });
     
     // Bookmark form submission
@@ -346,8 +361,7 @@ function renderList(level, items, title) {
                 <span class="folder-icon">📁</span>
                 <span class="item-content">${item.name}</span>
                 <div class="actions">
-                    <button class="edit-btn" onclick="editItem('${item.id}')">Edit</button>
-                    <button class="delete-btn" onclick="deleteItem('${item.id}')">Delete</button>
+                    <button class="edit-icon-btn" onclick="editItem('${item.id}')" title="Edit">✏️</button>
                 </div>
             `;
             li.addEventListener('click', (e) => {
@@ -367,8 +381,7 @@ function renderList(level, items, title) {
                     <span>${item.name}</span>
                 </a>
                 <div class="actions">
-                    <button class="edit-btn" onclick="event.stopPropagation(); editItem('${item.id}')">Edit</button>
-                    <button class="delete-btn" onclick="event.stopPropagation(); deleteItem('${item.id}')">Delete</button>
+                    <button class="edit-icon-btn" onclick="event.stopPropagation(); editItem('${item.id}')" title="Edit">✏️</button>
                 </div>
             `;
         }
@@ -859,13 +872,19 @@ function editItem(id) {
         document.getElementById('bookmarkUrl').value = editingItem.url || '';
     }
     
+    // Show delete button when editing
+    document.getElementById('deleteBookmarkBtn').style.display = 'block';
+    
     populateParentSelect();
     document.getElementById('bookmarkModal').classList.add('active');
 }
 
 // Delete item
 function deleteItem(id) {
-    if (!confirm('Are you sure you want to delete this item? This will also delete all its children.')) {
+    // If called from modal, confirmation is already done
+    const skipConfirm = arguments[1] === true;
+    
+    if (!skipConfirm && !confirm('Are you sure you want to delete this item? This will also delete all its children.')) {
         return;
     }
     
