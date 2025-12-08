@@ -194,12 +194,17 @@ h1 {
     list-style: none;
     min-height: 50px;
     position: relative;
+    padding: 5px 0;
 }
 
 .bookmark-list.drag-over {
-    background: rgba(102, 126, 234, 0.1);
+    background: rgba(102, 126, 234, 0.05);
     border: 2px dashed #667eea;
     border-radius: 6px;
+}
+
+.bookmark-list.drop-zone-end {
+    border-bottom: 3px solid #667eea;
 }
 
 .bookmark-item {

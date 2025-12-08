@@ -482,10 +482,14 @@ function renderList(level, items, title) {
     const paneTitle = pane.querySelector('h2');
     
     paneTitle.textContent = title || 'Bookmarks';
+    
+    // Make the list itself a drop zone for cross-level drops (before clearing)
+    const listParentId = getCurrentParentId(level);
+    
+    // Clear the list
     list.innerHTML = '';
     
-    // Make the list itself a drop zone for cross-level drops
-    const listParentId = getCurrentParentId(level);
+    // Setup drop zone after clearing (so it's fresh)
     setupListDropZone(list, level, listParentId);
     
     if (items.length === 0) {
@@ -616,68 +620,143 @@ function setupDragAndDrop(element, item, level) {
 
 // Setup drop zone for list container (allows dropping on empty space in list)
 function setupListDropZone(listElement, level, parentId) {
+    // Store parentId on the element for use in event handlers
+    listElement.dataset.dropParentId = parentId || '';
+    listElement.dataset.dropLevel = level.toString();
+    
+    // Remove existing listeners by cloning (to avoid duplicates on re-render)
+    const hasListeners = listElement.dataset.hasDropListeners === 'true';
+    if (hasListeners) {
+        const newListElement = listElement.cloneNode(true);
+        newListElement.dataset.dropParentId = parentId || '';
+        newListElement.dataset.dropLevel = level.toString();
+        listElement.parentNode.replaceChild(newListElement, listElement);
+        listElement = newListElement;
+    }
+    listElement.dataset.hasDropListeners = 'true';
+    
     listElement.addEventListener('dragover', (e) => {
-        // Only handle if not over a child item
-        if (e.target === listElement || e.target.closest('.bookmark-item') === null) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            
-            if (!e.dataTransfer.types.includes('application/json')) {
-                return;
+        // Check if we're over a bookmark item - if so, let the item handle it
+        const bookmarkItem = e.target.closest('.bookmark-item');
+        if (bookmarkItem) {
+            return; // Let the item's drop zone handle it
+        }
+        
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        
+        if (!e.dataTransfer.types.includes('application/json')) {
+            return;
+        }
+        
+        // Calculate if we're in the blank space below items
+        const rect = listElement.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const items = listElement.querySelectorAll('.bookmark-item');
+        
+        // Remove all insertion indicators from items
+        document.querySelectorAll('.bookmark-item').forEach(el => {
+            el.classList.remove('insert-before', 'insert-after');
+        });
+        
+        // Check if we're below all items
+        let isBelowAllItems = true;
+        if (items.length > 0) {
+            const lastItem = items[items.length - 1];
+            const lastItemRect = lastItem.getBoundingClientRect();
+            const lastItemBottom = lastItemRect.bottom - rect.top;
+            isBelowAllItems = y > lastItemBottom + 10; // 10px threshold below last item
+        }
+        
+        // Show visual feedback
+        listElement.classList.add('drag-over');
+        if (isBelowAllItems) {
+            listElement.classList.add('drop-zone-end');
+            // Add indicator to last item if exists
+            if (items.length > 0) {
+                const lastItem = items[items.length - 1];
+                lastItem.classList.add('insert-after');
             }
-            
-            // Show visual feedback on the list
-            listElement.classList.add('drag-over');
+        } else {
+            listElement.classList.remove('drop-zone-end');
         }
     });
     
     listElement.addEventListener('dragleave', (e) => {
         // Only remove if actually leaving the list
-        if (!listElement.contains(e.relatedTarget)) {
-            listElement.classList.remove('drag-over');
+        const rect = listElement.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+            listElement.classList.remove('drag-over', 'drop-zone-end');
+            document.querySelectorAll('.bookmark-item').forEach(el => {
+                el.classList.remove('insert-before', 'insert-after');
+            });
         }
     });
     
     listElement.addEventListener('drop', (e) => {
-        // Only handle if not dropped on a child item
-        if (e.target === listElement || e.target.closest('.bookmark-item') === null) {
-            e.preventDefault();
-            e.stopPropagation();
+        // Check if we're over a bookmark item - if so, let the item handle it
+        const bookmarkItem = e.target.closest('.bookmark-item');
+        if (bookmarkItem) {
+            return; // Let the item's drop zone handle it
+        }
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        listElement.classList.remove('drag-over', 'drop-zone-end');
+        document.querySelectorAll('.bookmark-item').forEach(el => {
+            el.classList.remove('insert-before', 'insert-after');
+        });
+        
+        const dragData = e.dataTransfer.getData('application/json');
+        if (!dragData) return;
+        
+        try {
+            const draggedItem = JSON.parse(dragData);
+            const draggedItemObj = bookmarks.find(b => b.id === draggedItem.id);
             
-            listElement.classList.remove('drag-over');
+            if (!draggedItemObj) return;
             
-            const dragData = e.dataTransfer.getData('application/json');
-            if (!dragData) return;
+            // Move to this level's parent
+            const newParent = parentId || '';
             
-            try {
-                const draggedItem = JSON.parse(dragData);
-                const draggedItemObj = bookmarks.find(b => b.id === draggedItem.id);
-                
-                if (!draggedItemObj) return;
-                
-                // Move to this level's parent
-                const newParent = parentId || '';
-                
-                // Only move if parent is actually different
-                if ((draggedItemObj.parent || '') !== newParent) {
-                    draggedItemObj.parent = newParent;
-                    draggedItemObj.order = undefined;
-                    
-                    // Set order to append at end
-                    const siblings = getItemsByParent(newParent);
-                    draggedItemObj.order = siblings.filter(s => s.id !== draggedItemObj.id).length;
-                    
-                    saveBookmarks();
-                    saveNavigationState();
-                    renderNavigation();
-                    
-                    if (document.getElementById('manageModal').classList.contains('active')) {
-                        renderBookmarkTree();
-                    }
-                }
-            } catch (e) {
-                console.error('Error handling list drop:', e);
+            // Calculate if we're below all items (append to end)
+            const rect = listElement.getBoundingClientRect();
+            const y = e.clientY - rect.top;
+            const items = listElement.querySelectorAll('.bookmark-item');
+            let appendToEnd = false;
+            
+            if (items.length > 0) {
+                const lastItem = items[items.length - 1];
+                const lastItemRect = lastItem.getBoundingClientRect();
+                const lastItemBottom = lastItemRect.bottom - rect.top;
+                appendToEnd = y > lastItemBottom + 10;
+            } else {
+                appendToEnd = true; // Empty list, always append
             }
+            
+            // Only move if parent is actually different
+            const sameParent = (draggedItemObj.parent || '') === newParent;
+            
+            if (!sameParent || appendToEnd) {
+                draggedItemObj.parent = newParent;
+                
+                // Set order to append at end
+                const siblings = getItemsByParent(newParent);
+                draggedItemObj.order = siblings.filter(s => s.id !== draggedItemObj.id).length;
+                
+                saveBookmarks();
+                saveNavigationState();
+                renderNavigation();
+                
+                if (document.getElementById('manageModal').classList.contains('active')) {
+                    renderBookmarkTree();
+                }
+            }
+        } catch (e) {
+            console.error('Error handling list drop:', e);
         }
     });
 }
