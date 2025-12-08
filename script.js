@@ -484,6 +484,10 @@ function renderList(level, items, title) {
     paneTitle.textContent = title || 'Bookmarks';
     list.innerHTML = '';
     
+    // Make the list itself a drop zone for cross-level drops
+    const listParentId = getCurrentParentId(level);
+    setupListDropZone(list, level, listParentId);
+    
     if (items.length === 0) {
         const emptyLi = document.createElement('li');
         emptyLi.className = 'drop-zone-empty';
@@ -491,7 +495,7 @@ function renderList(level, items, title) {
             emptyLi.textContent = `No bookmarks found matching "${searchQuery}"`;
         } else {
             emptyLi.textContent = 'No items (drop here to add)';
-            emptyLi.dataset.parent = getCurrentParentId(level);
+            emptyLi.dataset.parent = listParentId;
             setupDropZone(emptyLi, level);
         }
         emptyLi.style.padding = '20px';
@@ -602,15 +606,94 @@ function setupDragAndDrop(element, item, level) {
         element.classList.remove('dragging');
         document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
         document.querySelectorAll('.drop-zone').forEach(el => el.classList.remove('drop-zone'));
+        document.querySelectorAll('.insert-before').forEach(el => el.classList.remove('insert-before'));
+        document.querySelectorAll('.insert-after').forEach(el => el.classList.remove('insert-after'));
     });
     
     // Make it a drop zone
     setupDropZone(element, level, item);
 }
 
+// Setup drop zone for list container (allows dropping on empty space in list)
+function setupListDropZone(listElement, level, parentId) {
+    listElement.addEventListener('dragover', (e) => {
+        // Only handle if not over a child item
+        if (e.target === listElement || e.target.closest('.bookmark-item') === null) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            if (!e.dataTransfer.types.includes('application/json')) {
+                return;
+            }
+            
+            // Show visual feedback on the list
+            listElement.classList.add('drag-over');
+        }
+    });
+    
+    listElement.addEventListener('dragleave', (e) => {
+        // Only remove if actually leaving the list
+        if (!listElement.contains(e.relatedTarget)) {
+            listElement.classList.remove('drag-over');
+        }
+    });
+    
+    listElement.addEventListener('drop', (e) => {
+        // Only handle if not dropped on a child item
+        if (e.target === listElement || e.target.closest('.bookmark-item') === null) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            listElement.classList.remove('drag-over');
+            
+            const dragData = e.dataTransfer.getData('application/json');
+            if (!dragData) return;
+            
+            try {
+                const draggedItem = JSON.parse(dragData);
+                const draggedItemObj = bookmarks.find(b => b.id === draggedItem.id);
+                
+                if (!draggedItemObj) return;
+                
+                // Move to this level's parent
+                const newParent = parentId || '';
+                
+                // Only move if parent is actually different
+                if ((draggedItemObj.parent || '') !== newParent) {
+                    draggedItemObj.parent = newParent;
+                    draggedItemObj.order = undefined;
+                    
+                    // Set order to append at end
+                    const siblings = getItemsByParent(newParent);
+                    draggedItemObj.order = siblings.filter(s => s.id !== draggedItemObj.id).length;
+                    
+                    saveBookmarks();
+                    saveNavigationState();
+                    renderNavigation();
+                    
+                    if (document.getElementById('manageModal').classList.contains('active')) {
+                        renderBookmarkTree();
+                    }
+                }
+            } catch (e) {
+                console.error('Error handling list drop:', e);
+            }
+        }
+    });
+}
+
 // Setup drop zone
 function setupDropZone(element, level, item = null) {
-    const parentId = item ? item.parent || getCurrentParentId(level) : getCurrentParentId(level);
+    // For items, use their actual parent. For empty zones, use the parent of the current level
+    // This allows dragging across different levels
+    let parentId = '';
+    if (item) {
+        // Use the item's actual parent (this allows cross-level drops)
+        parentId = item.parent || '';
+    } else {
+        // For empty drop zones, use the parent of the current level
+        parentId = getCurrentParentId(level);
+    }
     
     element.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -621,26 +704,60 @@ function setupDropZone(element, level, item = null) {
             return;
         }
         
-        // We can't read data in dragover, but we can show visual feedback
-        // Validation will happen in drop handler
-        element.classList.add('drag-over');
-        if (item && item.type === 'folder') {
-            element.classList.add('drop-zone');
-        } else if (item) {
-            // Show visual feedback for reordering (dropping on non-folder in same list)
-            element.classList.add('drop-zone');
+        // Remove all insertion indicators first
+        document.querySelectorAll('.bookmark-item').forEach(el => {
+            el.classList.remove('insert-before', 'insert-after', 'drag-over', 'drop-zone');
+        });
+        
+        if (!item) {
+            // Empty drop zone - allow dropping to move items to this level
+            element.classList.add('drag-over', 'drop-zone');
+            return;
+        }
+        
+        // Calculate position relative to element
+        const rect = element.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const height = rect.height;
+        const threshold = height / 3; // Top and bottom third for insertion
+        
+        // If dragging over a folder, show drop-zone (move into folder)
+        if (item.type === 'folder') {
+            element.classList.add('drag-over', 'drop-zone');
+        } else {
+            // For non-folder items, show insertion indicators
+            if (y < threshold) {
+                // Insert before this item
+                element.classList.add('insert-before', 'drag-over');
+            } else if (y > height - threshold) {
+                // Insert after this item
+                element.classList.add('insert-after', 'drag-over');
+            } else {
+                // Drop on item (reorder to this position)
+                element.classList.add('drag-over', 'drop-zone');
+            }
         }
     });
     
     element.addEventListener('dragleave', (e) => {
-        element.classList.remove('drag-over', 'drop-zone');
+        // Only remove classes if we're actually leaving the element
+        const rect = element.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+            element.classList.remove('drag-over', 'drop-zone', 'insert-before', 'insert-after');
+        }
     });
     
     element.addEventListener('drop', (e) => {
         e.preventDefault();
         e.stopPropagation();
         
-        element.classList.remove('drag-over', 'drop-zone');
+        // Remove all visual indicators
+        element.classList.remove('drag-over', 'drop-zone', 'insert-before', 'insert-after');
+        document.querySelectorAll('.bookmark-item').forEach(el => {
+            el.classList.remove('insert-before', 'insert-after');
+        });
         
         const dragData = e.dataTransfer.getData('application/json');
         if (!dragData) return;
@@ -656,10 +773,41 @@ function setupDropZone(element, level, item = null) {
                 return;
             }
             
-            // Determine new parent
-            let newParent = parentId || '';
-            if (item && item.type === 'folder') {
-                newParent = item.id;
+            // Calculate drop position
+            const rect = element.getBoundingClientRect();
+            const y = e.clientY - rect.top;
+            const height = rect.height;
+            const threshold = height / 3;
+            
+            let insertPosition = 'on'; // 'before', 'after', or 'on'
+            if (item && item.type !== 'folder') {
+                if (y < threshold) {
+                    insertPosition = 'before';
+                } else if (y > height - threshold) {
+                    insertPosition = 'after';
+                }
+            }
+            
+            // Determine new parent based on drop target
+            let newParent = '';
+            if (item) {
+                if (item.type === 'folder') {
+                    // Dropping on a folder: move into that folder
+                    newParent = item.id;
+                } else {
+                    // Dropping on a non-folder item: use that item's parent
+                    // This allows dragging from level 2 to level 1 by dropping on a root item
+                    newParent = item.parent || '';
+                }
+            } else {
+                // Dropping on empty space: use the parent of the current level
+                // For level 1, this should be '' (root)
+                newParent = parentId || '';
+            }
+            
+            // Special case: if dropping on empty space in level 1, ensure it goes to root
+            if (!item && level === 1) {
+                newParent = '';
             }
             
             // Check if we're reordering within the same parent
@@ -671,14 +819,19 @@ function setupDropZone(element, level, item = null) {
                 return;
             }
             
-            // If same parent, reorder items
-            if (sameParent && item) {
-                reorderBookmark(draggedItemObj, item, newParent);
+            // If same parent and not dropping on folder and not empty drop zone, reorder items
+            if (sameParent && item && item.type !== 'folder') {
+                reorderBookmark(draggedItemObj, item, newParent, insertPosition);
             } else {
-                // Update parent (moving to different folder)
+                // Update parent (moving to different folder or empty drop zone)
                 draggedItemObj.parent = newParent;
                 // Reset order when moving to new parent
                 draggedItemObj.order = undefined;
+                // If moving to a new parent, set order to append at end
+                if (!sameParent) {
+                    const siblings = getItemsByParent(newParent);
+                    draggedItemObj.order = siblings.filter(s => s.id !== draggedItemObj.id).length;
+                }
             }
             
             saveBookmarks();
@@ -827,7 +980,7 @@ function isDescendant(itemId, ancestorId) {
 }
 
 // Reorder bookmark within the same parent
-function reorderBookmark(draggedItem, targetItem, parentId) {
+function reorderBookmark(draggedItem, targetItem, parentId, insertPosition = 'on') {
     // Get all items in the same parent, sorted by current order
     const siblings = getItemsByParent(parentId);
     
@@ -835,9 +988,18 @@ function reorderBookmark(draggedItem, targetItem, parentId) {
     const siblingsWithoutDragged = siblings.filter(s => s.id !== draggedItem.id);
     
     // Find target index
-    const targetIndex = siblingsWithoutDragged.findIndex(s => s.id === targetItem.id);
+    let targetIndex = siblingsWithoutDragged.findIndex(s => s.id === targetItem.id);
     
     if (targetIndex === -1) return;
+    
+    // Adjust target index based on insert position
+    if (insertPosition === 'after') {
+        targetIndex += 1;
+    } else if (insertPosition === 'before') {
+        // targetIndex stays the same (insert before)
+    } else {
+        // 'on' - replace position (same as before)
+    }
     
     // Insert dragged item at target position
     siblingsWithoutDragged.splice(targetIndex, 0, draggedItem);

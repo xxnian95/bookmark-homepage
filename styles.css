@@ -192,6 +192,14 @@ h1 {
 
 .bookmark-list {
     list-style: none;
+    min-height: 50px;
+    position: relative;
+}
+
+.bookmark-list.drag-over {
+    background: rgba(102, 126, 234, 0.1);
+    border: 2px dashed #667eea;
+    border-radius: 6px;
 }
 
 .bookmark-item {
@@ -233,6 +241,30 @@ h1 {
     border-width: 3px;
     background: #e7f3ff;
     box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+}
+
+.bookmark-item.insert-before::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #667eea;
+    border-radius: 2px;
+    z-index: 10;
+}
+
+.bookmark-item.insert-after::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #667eea;
+    border-radius: 2px;
+    z-index: 10;
 }
 
 .drag-handle {
