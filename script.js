@@ -477,20 +477,28 @@ function getItemsByParent(parentId) {
 
 // Render a list in a pane
 function renderList(level, items, title) {
-    const list = document.getElementById(`list${level}`);
+    let list = document.getElementById(`list${level}`);
     const pane = document.getElementById(`pane${level}`);
-    const paneTitle = pane.querySelector('h2');
+    if (!list || !pane) {
+        console.error(`Cannot find list or pane for level ${level}`);
+        return;
+    }
     
+    const paneTitle = pane.querySelector('h2');
     paneTitle.textContent = title || 'Bookmarks';
     
-    // Make the list itself a drop zone for cross-level drops (before clearing)
+    // Get the parent ID for this level (needed for drop zone)
     const listParentId = getCurrentParentId(level);
     
-    // Clear the list
+    // Clear the list content first
     list.innerHTML = '';
     
-    // Setup drop zone after clearing (so it's fresh)
-    setupListDropZone(list, level, listParentId);
+    // Setup drop zone after clearing (returns the actual list element, might be a new one)
+    list = setupListDropZone(list, level, listParentId);
+    
+    if (!list) {
+        return;
+    }
     
     if (items.length === 0) {
         const emptyLi = document.createElement('li');
@@ -509,6 +517,7 @@ function renderList(level, items, title) {
         return;
     }
     
+    // Render all items
     items.forEach((item, index) => {
         const li = document.createElement('li');
         li.className = `bookmark-item ${item.type}`;
@@ -624,18 +633,27 @@ function setupListDropZone(listElement, level, parentId) {
     listElement.dataset.dropParentId = parentId || '';
     listElement.dataset.dropLevel = level.toString();
     
-    // Remove existing listeners by cloning (to avoid duplicates on re-render)
-    const hasListeners = listElement.dataset.hasDropListeners === 'true';
-    if (hasListeners) {
-        const newListElement = listElement.cloneNode(true);
+    // Check if listeners are already attached
+    // Only clone if we have existing listeners (to avoid duplicate listeners)
+    // Since we clear the list before calling this, it's safe to clone
+    let actualListElement = listElement;
+    if (listElement.dataset.hasDropListeners === 'true') {
+        // Create a new element without listeners
+        // The list should be empty at this point, so we don't need to preserve content
+        const newListElement = document.createElement('ul');
+        newListElement.className = listElement.className;
+        newListElement.id = listElement.id;
         newListElement.dataset.dropParentId = parentId || '';
         newListElement.dataset.dropLevel = level.toString();
-        listElement.parentNode.replaceChild(newListElement, listElement);
-        listElement = newListElement;
+        if (listElement.parentNode) {
+            listElement.parentNode.replaceChild(newListElement, listElement);
+            actualListElement = newListElement;
+        }
     }
-    listElement.dataset.hasDropListeners = 'true';
+    actualListElement.dataset.hasDropListeners = 'true';
     
-    listElement.addEventListener('dragover', (e) => {
+    // Use the actual list element for event listeners
+    actualListElement.addEventListener('dragover', (e) => {
         // Check if we're over a bookmark item - if so, let the item handle it
         const bookmarkItem = e.target.closest('.bookmark-item');
         if (bookmarkItem) {
@@ -650,9 +668,9 @@ function setupListDropZone(listElement, level, parentId) {
         }
         
         // Calculate if we're in the blank space below items
-        const rect = listElement.getBoundingClientRect();
+        const rect = actualListElement.getBoundingClientRect();
         const y = e.clientY - rect.top;
-        const items = listElement.querySelectorAll('.bookmark-item');
+        const items = actualListElement.querySelectorAll('.bookmark-item');
         
         // Remove all insertion indicators from items
         document.querySelectorAll('.bookmark-item').forEach(el => {
@@ -669,33 +687,33 @@ function setupListDropZone(listElement, level, parentId) {
         }
         
         // Show visual feedback
-        listElement.classList.add('drag-over');
+        actualListElement.classList.add('drag-over');
         if (isBelowAllItems) {
-            listElement.classList.add('drop-zone-end');
+            actualListElement.classList.add('drop-zone-end');
             // Add indicator to last item if exists
             if (items.length > 0) {
                 const lastItem = items[items.length - 1];
                 lastItem.classList.add('insert-after');
             }
         } else {
-            listElement.classList.remove('drop-zone-end');
+            actualListElement.classList.remove('drop-zone-end');
         }
     });
     
-    listElement.addEventListener('dragleave', (e) => {
+    actualListElement.addEventListener('dragleave', (e) => {
         // Only remove if actually leaving the list
-        const rect = listElement.getBoundingClientRect();
+        const rect = actualListElement.getBoundingClientRect();
         const x = e.clientX;
         const y = e.clientY;
         if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-            listElement.classList.remove('drag-over', 'drop-zone-end');
+            actualListElement.classList.remove('drag-over', 'drop-zone-end');
             document.querySelectorAll('.bookmark-item').forEach(el => {
                 el.classList.remove('insert-before', 'insert-after');
             });
         }
     });
     
-    listElement.addEventListener('drop', (e) => {
+    actualListElement.addEventListener('drop', (e) => {
         // Check if we're over a bookmark item - if so, let the item handle it
         const bookmarkItem = e.target.closest('.bookmark-item');
         if (bookmarkItem) {
@@ -705,7 +723,7 @@ function setupListDropZone(listElement, level, parentId) {
         e.preventDefault();
         e.stopPropagation();
         
-        listElement.classList.remove('drag-over', 'drop-zone-end');
+        actualListElement.classList.remove('drag-over', 'drop-zone-end');
         document.querySelectorAll('.bookmark-item').forEach(el => {
             el.classList.remove('insert-before', 'insert-after');
         });
@@ -723,9 +741,9 @@ function setupListDropZone(listElement, level, parentId) {
             const newParent = parentId || '';
             
             // Calculate if we're below all items (append to end)
-            const rect = listElement.getBoundingClientRect();
+            const rect = actualListElement.getBoundingClientRect();
             const y = e.clientY - rect.top;
-            const items = listElement.querySelectorAll('.bookmark-item');
+            const items = actualListElement.querySelectorAll('.bookmark-item');
             let appendToEnd = false;
             
             if (items.length > 0) {
@@ -759,6 +777,9 @@ function setupListDropZone(listElement, level, parentId) {
             console.error('Error handling list drop:', e);
         }
     });
+    
+    // Return the actual list element (might be a new one if cloned)
+    return actualListElement;
 }
 
 // Setup drop zone
@@ -962,9 +983,16 @@ function navigateToFolder(folder, currentLevel) {
     
     const children = getItemsByParent(folder.id);
     nextPane.dataset.currentFolderId = folder.id;
+    
+    // Render the list with children
     renderList(nextLevel, children, folder.name);
+    
+    // Ensure pane is visible
     nextPane.style.display = 'block';
     nextPane.classList.add('active');
+    
+    // Force a reflow to ensure rendering
+    void nextPane.offsetHeight;
     
     // Update active state
     const currentPane = document.getElementById(`pane${currentLevel}`);
