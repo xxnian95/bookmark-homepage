@@ -14,14 +14,20 @@
                 <button id="exportBtn" class="manage-btn secondary">Export</button>
                 <button id="importBtn" class="manage-btn secondary">Import</button>
                 <input type="file" id="fileInput" accept=".json,.txt,.html" style="display: none;">
+                <button id="settingsBtn" class="manage-btn secondary">⚙️ Settings</button>
                 <button id="manageBtn" class="manage-btn">Manage Bookmarks</button>
             </div>
         </header>
         <div id="fileStatus" class="file-status"></div>
         
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Search bookmarks by name..." class="search-input">
+            <button id="clearSearchBtn" class="clear-search-btn" style="display: none;">✕</button>
+        </div>
+        
         <div class="main-content">
-            <!-- Navigation Panes (up to 3 levels) -->
-            <div class="nav-panes">
+            <!-- Navigation Panes (up to 10 levels) -->
+            <div class="nav-panes" id="navPanes">
                 <div class="nav-pane" id="pane1" data-level="1">
                     <h2>Bookmarks</h2>
                     <ul class="bookmark-list" id="list1"></ul>
@@ -33,6 +39,34 @@
                 <div class="nav-pane" id="pane3" data-level="3" style="display: none;">
                     <h2></h2>
                     <ul class="bookmark-list" id="list3"></ul>
+                </div>
+                <div class="nav-pane" id="pane4" data-level="4" style="display: none;">
+                    <h2></h2>
+                    <ul class="bookmark-list" id="list4"></ul>
+                </div>
+                <div class="nav-pane" id="pane5" data-level="5" style="display: none;">
+                    <h2></h2>
+                    <ul class="bookmark-list" id="list5"></ul>
+                </div>
+                <div class="nav-pane" id="pane6" data-level="6" style="display: none;">
+                    <h2></h2>
+                    <ul class="bookmark-list" id="list6"></ul>
+                </div>
+                <div class="nav-pane" id="pane7" data-level="7" style="display: none;">
+                    <h2></h2>
+                    <ul class="bookmark-list" id="list7"></ul>
+                </div>
+                <div class="nav-pane" id="pane8" data-level="8" style="display: none;">
+                    <h2></h2>
+                    <ul class="bookmark-list" id="list8"></ul>
+                </div>
+                <div class="nav-pane" id="pane9" data-level="9" style="display: none;">
+                    <h2></h2>
+                    <ul class="bookmark-list" id="list9"></ul>
+                </div>
+                <div class="nav-pane" id="pane10" data-level="10" style="display: none;">
+                    <h2></h2>
+                    <ul class="bookmark-list" id="list10"></ul>
                 </div>
             </div>
         </div>
@@ -51,6 +85,35 @@
                     <button id="addFolderBtn" class="action-btn">Add Folder</button>
                 </div>
                 <div class="bookmark-tree" id="bookmarkTree"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content small">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="close-btn" id="closeSettingsModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="settingsForm">
+                    <div class="form-group">
+                        <label for="fontSize">Font Size (px):</label>
+                        <input type="number" id="fontSize" min="10" max="24" step="1" required>
+                        <small>Controls the font size of bookmark items (10-24px)</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="itemGap">Item Gap (px):</label>
+                        <input type="number" id="itemGap" min="0" max="20" step="1" required>
+                        <small>Controls the spacing between bookmark items (0-20px)</small>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="action-btn primary">Save</button>
+                        <button type="button" class="action-btn" id="cancelSettingsBtn">Cancel</button>
+                        <button type="button" class="action-btn secondary" id="resetSettingsBtn">Reset to Default</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

@@ -3,12 +3,26 @@ let bookmarks = [];
 let currentPath = [];
 let editingItem = null;
 let fileName = 'bookmarks.json';
+let searchQuery = '';
 const STORAGE_KEY = 'homepageBookmarks';
+const SETTINGS_KEY = 'homepageSettings';
+const NAVIGATION_STATE_KEY = 'homepageNavigationState';
+
+// Default settings
+const DEFAULT_SETTINGS = {
+    fontSize: 16,
+    itemGap: 8
+};
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    loadSettings();
+    applySettings();
     setupEventListeners();
     loadBookmarks();
+    
+    // Restore navigation state before rendering
+    restoreNavigationState();
     renderNavigation();
     
     // Add some default bookmarks if empty
@@ -18,6 +32,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     updateFileStatus();
+    
+    // Save navigation state before page unload (when clicking bookmarks)
+    window.addEventListener('beforeunload', () => {
+        saveNavigationState();
+    });
+    
+    // Also save state periodically as backup
+    setInterval(() => {
+        saveNavigationState();
+    }, 5000); // Save every 5 seconds
 });
 
 // Load bookmarks from localStorage
@@ -26,6 +50,15 @@ function loadBookmarks() {
     if (stored) {
         try {
             bookmarks = JSON.parse(stored);
+            // Ensure all bookmarks have required fields (for backward compatibility)
+            bookmarks.forEach((bookmark, index) => {
+                if (bookmark.accessTime === undefined) {
+                    bookmark.accessTime = 0;
+                }
+                if (bookmark.order === undefined) {
+                    bookmark.order = index;
+                }
+            });
         } catch (e) {
             console.error('Error loading bookmarks from localStorage:', e);
         }
@@ -41,6 +74,37 @@ function saveBookmarks() {
         console.error('Error saving bookmarks to localStorage:', e);
         alert('Error saving bookmarks. Storage may be full.');
     }
+}
+
+// Load settings from localStorage
+function loadSettings() {
+    const stored = localStorage.getItem(SETTINGS_KEY);
+    if (stored) {
+        try {
+            return JSON.parse(stored);
+        } catch (e) {
+            console.error('Error loading settings from localStorage:', e);
+        }
+    }
+    return { ...DEFAULT_SETTINGS };
+}
+
+// Save settings to localStorage
+function saveSettings(settings) {
+    try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {
+        console.error('Error saving settings to localStorage:', e);
+        alert('Error saving settings. Storage may be full.');
+    }
+}
+
+// Apply settings to the page
+function applySettings() {
+    const settings = loadSettings();
+    const root = document.documentElement;
+    root.style.setProperty('--bookmark-font-size', `${settings.fontSize}px`);
+    root.style.setProperty('--bookmark-item-gap', `${settings.itemGap}px`);
 }
 
 // Export bookmarks to file (download)
@@ -70,11 +134,11 @@ function exportBookmarks() {
 // Add default bookmarks
 function addDefaultBookmarks() {
     bookmarks = [
-        { id: '1', name: 'Google', url: 'https://www.google.com', type: 'bookmark', parent: '' },
-        { id: '2', name: 'GitHub', url: 'https://www.github.com', type: 'bookmark', parent: '' },
-        { id: '3', name: 'Development', type: 'folder', parent: '', children: [] },
-        { id: '4', name: 'Stack Overflow', url: 'https://stackoverflow.com', type: 'bookmark', parent: '3' },
-        { id: '5', name: 'MDN Web Docs', url: 'https://developer.mozilla.org', type: 'bookmark', parent: '3' }
+        { id: '1', name: 'Google', url: 'https://www.google.com', type: 'bookmark', parent: '', accessTime: 0, order: 0 },
+        { id: '2', name: 'GitHub', url: 'https://www.github.com', type: 'bookmark', parent: '', accessTime: 0, order: 1 },
+        { id: '3', name: 'Development', type: 'folder', parent: '', children: [], order: 2 },
+        { id: '4', name: 'Stack Overflow', url: 'https://stackoverflow.com', type: 'bookmark', parent: '3', accessTime: 0, order: 0 },
+        { id: '5', name: 'MDN Web Docs', url: 'https://developer.mozilla.org', type: 'bookmark', parent: '3', accessTime: 0, order: 1 }
     ];
     saveBookmarks();
 }
@@ -87,6 +151,29 @@ function setupEventListeners() {
         document.getElementById('fileInput').click();
     });
     document.getElementById('fileInput').addEventListener('change', handleFileImport);
+    
+    // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    
+    searchInput.addEventListener('input', (e) => {
+        searchQuery = e.target.value.trim().toLowerCase();
+        if (searchQuery) {
+            clearSearchBtn.style.display = 'block';
+        } else {
+            clearSearchBtn.style.display = 'none';
+        }
+        renderNavigation();
+    });
+    
+    clearSearchBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        searchQuery = '';
+        clearSearchBtn.style.display = 'none';
+        // Restore navigation state when clearing search
+        restoreNavigationState();
+        renderNavigation();
+    });
     
     // Management modal
     document.getElementById('manageBtn').addEventListener('click', () => {
@@ -169,40 +256,223 @@ function setupEventListeners() {
         }
     });
     
+    // Settings modal
+    document.getElementById('settingsBtn').addEventListener('click', () => {
+        const settings = loadSettings();
+        document.getElementById('fontSize').value = settings.fontSize;
+        document.getElementById('itemGap').value = settings.itemGap;
+        document.getElementById('settingsModal').classList.add('active');
+    });
+    
+    document.getElementById('closeSettingsModal').addEventListener('click', () => {
+        document.getElementById('settingsModal').classList.remove('active');
+    });
+    
+    document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
+        document.getElementById('settingsModal').classList.remove('active');
+    });
+    
+    document.getElementById('resetSettingsBtn').addEventListener('click', () => {
+        if (confirm('Reset settings to default values?')) {
+            saveSettings(DEFAULT_SETTINGS);
+            applySettings();
+            const settings = loadSettings();
+            document.getElementById('fontSize').value = settings.fontSize;
+            document.getElementById('itemGap').value = settings.itemGap;
+        }
+    });
+    
+    // Settings form submission
+    document.getElementById('settingsForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fontSize = parseInt(document.getElementById('fontSize').value);
+        const itemGap = parseInt(document.getElementById('itemGap').value);
+        
+        if (fontSize < 10 || fontSize > 24) {
+            alert('Font size must be between 10 and 24 pixels');
+            return;
+        }
+        
+        if (itemGap < 0 || itemGap > 20) {
+            alert('Item gap must be between 0 and 20 pixels');
+            return;
+        }
+        
+        const settings = {
+            fontSize: fontSize,
+            itemGap: itemGap
+        };
+        
+        saveSettings(settings);
+        applySettings();
+        document.getElementById('settingsModal').classList.remove('active');
+    });
+    
     // Close modals on outside click
     window.addEventListener('click', (e) => {
         const manageModal = document.getElementById('manageModal');
         const bookmarkModal = document.getElementById('bookmarkModal');
+        const settingsModal = document.getElementById('settingsModal');
         if (e.target === manageModal) {
             manageModal.classList.remove('active');
         }
         if (e.target === bookmarkModal) {
             bookmarkModal.classList.remove('active');
         }
+        if (e.target === settingsModal) {
+            settingsModal.classList.remove('active');
+        }
     });
 }
+
+// Maximum number of navigation levels supported
+const MAX_LEVELS = 10;
 
 // Render navigation panes
 function renderNavigation() {
     // Clear all panes
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= MAX_LEVELS; i++) {
         const list = document.getElementById(`list${i}`);
         const pane = document.getElementById(`pane${i}`);
-        list.innerHTML = '';
-        pane.style.display = 'none';
-        pane.classList.remove('active');
+        if (list && pane) {
+            list.innerHTML = '';
+            pane.style.display = 'none';
+            pane.classList.remove('active');
+        }
     }
     
-    // Show first pane with root items
-    const rootItems = getItemsByParent('');
-    renderList(1, rootItems, 'Bookmarks');
-    document.getElementById('pane1').style.display = 'block';
-    document.getElementById('pane1').classList.add('active');
+    // If searching, show search results
+    if (searchQuery) {
+        const searchResults = searchBookmarks(searchQuery);
+        renderList(1, searchResults, `Search Results (${searchResults.length})`);
+        const pane1 = document.getElementById('pane1');
+        if (pane1) {
+            pane1.style.display = 'block';
+            pane1.classList.add('active');
+        }
+    } else {
+        // Restore navigation path if available
+        if (currentPath.length > 0) {
+            restoreNavigationPath();
+        } else {
+            // Show first pane with root items
+            const rootItems = getItemsByParent('');
+            renderList(1, rootItems, 'Bookmarks');
+            const pane1 = document.getElementById('pane1');
+            if (pane1) {
+                pane1.style.display = 'block';
+                pane1.classList.add('active');
+            }
+        }
+    }
 }
 
-// Get items by parent
+// Restore navigation path from currentPath
+function restoreNavigationPath() {
+    // Show root pane first
+    const rootItems = getItemsByParent('');
+    renderList(1, rootItems, 'Bookmarks');
+    const pane1 = document.getElementById('pane1');
+    if (pane1) {
+        pane1.style.display = 'block';
+        pane1.classList.add('active');
+    }
+    
+    // Navigate through the path
+    currentPath.forEach((folder, index) => {
+        const level = index + 2;
+        if (level > MAX_LEVELS) return;
+        
+        const pane = document.getElementById(`pane${level}`);
+        if (!pane) return;
+        
+        const children = getItemsByParent(folder.id);
+        pane.dataset.currentFolderId = folder.id;
+        renderList(level, children, folder.name);
+        pane.style.display = 'block';
+        pane.classList.add('active');
+        
+        // Remove active from previous pane
+        if (index > 0) {
+            const prevPane = document.getElementById(`pane${level - 1}`);
+            if (prevPane) {
+                prevPane.classList.remove('active');
+            }
+        }
+    });
+}
+
+// Search bookmarks by name
+function searchBookmarks(query) {
+    if (!query) return [];
+    
+    const lowerQuery = query.toLowerCase();
+    const results = bookmarks.filter(item => {
+        return item.name.toLowerCase().includes(lowerQuery);
+    });
+    
+    // Sort by access time (most recent first), then by name
+    return results.sort((a, b) => {
+        const aTime = a.accessTime || 0;
+        const bTime = b.accessTime || 0;
+        if (bTime !== aTime) {
+            return bTime - aTime; // Most recent first
+        }
+        // If same access time (or both 0), sort alphabetically
+        return a.name.localeCompare(b.name);
+    });
+}
+
+// Record bookmark access time
+function recordBookmarkAccess(bookmarkId) {
+    const bookmark = bookmarks.find(b => b.id === bookmarkId);
+    if (bookmark) {
+        bookmark.accessTime = Date.now();
+        saveBookmarks();
+        // Re-render to update emoji icon
+        renderNavigation();
+    }
+}
+
+// Get emoji icon based on access time
+function getBookmarkIcon(accessTime) {
+    if (!accessTime || accessTime === 0) {
+        return '🔗'; // Never accessed
+    }
+    
+    const now = Date.now();
+    const timeDiff = now - accessTime;
+    const oneHour = 60 * 60 * 1000;
+    const oneDay = 24 * oneHour;
+    const oneWeek = 7 * oneDay;
+    const oneMonth = 30 * oneDay;
+    
+    if (timeDiff < oneHour) {
+        return '🔥'; // Very recent (last hour)
+    } else if (timeDiff < oneDay) {
+        return '⭐'; // Recent (last day)
+    } else if (timeDiff < oneWeek) {
+        return '✨'; // This week
+    } else if (timeDiff < oneMonth) {
+        return '📌'; // This month
+    } else {
+        return '🔗'; // Older than a month
+    }
+}
+
+// Get items by parent, sorted by order
 function getItemsByParent(parentId) {
-    return bookmarks.filter(item => item.parent === parentId);
+    const items = bookmarks.filter(item => item.parent === parentId);
+    // Sort by order field (if exists), then by creation/access time
+    return items.sort((a, b) => {
+        const aOrder = a.order !== undefined ? a.order : Infinity;
+        const bOrder = b.order !== undefined ? b.order : Infinity;
+        if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+        }
+        // If same order, maintain original order (by index in array)
+        return bookmarks.indexOf(a) - bookmarks.indexOf(b);
+    });
 }
 
 // Render a list in a pane
@@ -217,12 +487,16 @@ function renderList(level, items, title) {
     if (items.length === 0) {
         const emptyLi = document.createElement('li');
         emptyLi.className = 'drop-zone-empty';
-        emptyLi.textContent = 'No items (drop here to add)';
+        if (searchQuery) {
+            emptyLi.textContent = `No bookmarks found matching "${searchQuery}"`;
+        } else {
+            emptyLi.textContent = 'No items (drop here to add)';
+            emptyLi.dataset.parent = getCurrentParentId(level);
+            setupDropZone(emptyLi, level);
+        }
         emptyLi.style.padding = '20px';
         emptyLi.style.color = '#999';
         emptyLi.style.textAlign = 'center';
-        emptyLi.dataset.parent = getCurrentParentId(level);
-        setupDropZone(emptyLi, level);
         list.appendChild(emptyLi);
         return;
     }
@@ -231,34 +505,62 @@ function renderList(level, items, title) {
         const li = document.createElement('li');
         li.className = `bookmark-item ${item.type}`;
         li.dataset.id = item.id;
-        li.draggable = true;
+        // Disable drag and drop when searching
+        li.draggable = !searchQuery;
         
         if (item.type === 'folder') {
+            // Highlight search query in name if searching
+            let displayName = item.name;
+            if (searchQuery && searchQuery.length > 0) {
+                const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                displayName = item.name.replace(regex, '<mark>$1</mark>');
+            }
+            
             li.innerHTML = `
                 <span class="drag-handle">☰</span>
                 <span class="folder-icon">📁</span>
-                <span class="item-content">${item.name}</span>
+                <span class="item-content">${displayName}</span>
                 <div class="actions">
                     <button class="edit-icon-btn" onclick="editItem('${item.id}')" title="Edit">✏️</button>
                 </div>
             `;
-            li.addEventListener('click', (e) => {
-                if (!e.target.closest('.actions') && !e.target.closest('.drag-handle')) {
-                    navigateToFolder(item, level);
-                }
-            });
+            // Only allow folder navigation if not searching
+            if (!searchQuery) {
+                li.addEventListener('click', (e) => {
+                    if (!e.target.closest('.actions') && !e.target.closest('.drag-handle')) {
+                        navigateToFolder(item, level);
+                    }
+                });
+            }
         } else {
-            // Use emoji icon for bookmarks
+            // Use emoji icon for bookmarks based on access time
+            // Highlight search query in name if searching
+            let displayName = item.name;
+            if (searchQuery && searchQuery.length > 0) {
+                const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                displayName = item.name.replace(regex, '<mark>$1</mark>');
+            }
+            
+            const bookmarkIcon = getBookmarkIcon(item.accessTime);
+            
             li.innerHTML = `
                 <span class="drag-handle">☰</span>
-                <span class="bookmark-icon">🔗</span>
-                <a href="${item.url}" target="_blank">
-                    <span>${item.name}</span>
+                <span class="bookmark-icon">${bookmarkIcon}</span>
+                <a href="${item.url}" target="_blank" data-bookmark-id="${item.id}">
+                    <span>${displayName}</span>
                 </a>
                 <div class="actions">
                     <button class="edit-icon-btn" onclick="event.stopPropagation(); editItem('${item.id}')" title="Edit">✏️</button>
                 </div>
             `;
+            
+            // Track access time when bookmark is clicked
+            const bookmarkLink = li.querySelector('a[data-bookmark-id]');
+            if (bookmarkLink) {
+                bookmarkLink.addEventListener('click', () => {
+                    recordBookmarkAccess(item.id);
+                });
+            }
         }
         
         setupDragAndDrop(li, item, level);
@@ -324,6 +626,9 @@ function setupDropZone(element, level, item = null) {
         element.classList.add('drag-over');
         if (item && item.type === 'folder') {
             element.classList.add('drop-zone');
+        } else if (item) {
+            // Show visual feedback for reordering (dropping on non-folder in same list)
+            element.classList.add('drop-zone');
         }
     });
     
@@ -346,25 +651,39 @@ function setupDropZone(element, level, item = null) {
             
             if (!draggedItemObj) return;
             
+            // Don't allow moving to itself
+            if (item && item.id === draggedItemObj.id) {
+                return;
+            }
+            
             // Determine new parent
             let newParent = parentId || '';
             if (item && item.type === 'folder') {
                 newParent = item.id;
             }
             
-            // Don't allow moving to itself or its descendants
-            if (item && item.id === draggedItemObj.id) {
-                return;
-            }
+            // Check if we're reordering within the same parent
+            const sameParent = (draggedItemObj.parent || '') === newParent;
+            
+            // Don't allow moving to descendants
             if (item && item.type === 'folder' && isDescendant(item.id, draggedItemObj.id)) {
                 alert('Cannot move a folder into itself or its descendants');
                 return;
             }
             
-            // Update parent
-            draggedItemObj.parent = newParent;
+            // If same parent, reorder items
+            if (sameParent && item) {
+                reorderBookmark(draggedItemObj, item, newParent);
+            } else {
+                // Update parent (moving to different folder)
+                draggedItemObj.parent = newParent;
+                // Reset order when moving to new parent
+                draggedItemObj.order = undefined;
+            }
             
             saveBookmarks();
+            // Save navigation state before rendering
+            saveNavigationState();
             renderNavigation();
             
             // If we're in management modal, refresh it too
@@ -379,8 +698,8 @@ function setupDropZone(element, level, item = null) {
 
 // Navigate to a folder
 function navigateToFolder(folder, currentLevel) {
-    if (currentLevel >= 3) {
-        alert('Maximum depth of 3 levels reached');
+    if (currentLevel >= MAX_LEVELS) {
+        alert(`Maximum depth of ${MAX_LEVELS} levels reached`);
         return;
     }
     
@@ -388,26 +707,80 @@ function navigateToFolder(folder, currentLevel) {
     currentPath = currentPath.slice(0, currentLevel - 1);
     currentPath.push(folder);
     
+    // Save navigation state
+    saveNavigationState();
+    
     // Hide panes beyond current level
-    for (let i = currentLevel + 1; i <= 3; i++) {
+    for (let i = currentLevel + 1; i <= MAX_LEVELS; i++) {
         const pane = document.getElementById(`pane${i}`);
-        pane.style.display = 'none';
-        pane.classList.remove('active');
-        pane.dataset.currentFolderId = '';
+        if (pane) {
+            pane.style.display = 'none';
+            pane.classList.remove('active');
+            pane.dataset.currentFolderId = '';
+        }
     }
     
     // Show next pane
     const nextLevel = currentLevel + 1;
     const nextPane = document.getElementById(`pane${nextLevel}`);
-    const children = getItemsByParent(folder.id);
+    if (!nextPane) {
+        alert(`Cannot navigate deeper than ${MAX_LEVELS} levels`);
+        return;
+    }
     
+    const children = getItemsByParent(folder.id);
     nextPane.dataset.currentFolderId = folder.id;
     renderList(nextLevel, children, folder.name);
     nextPane.style.display = 'block';
     nextPane.classList.add('active');
     
     // Update active state
-    document.getElementById(`pane${currentLevel}`).classList.remove('active');
+    const currentPane = document.getElementById(`pane${currentLevel}`);
+    if (currentPane) {
+        currentPane.classList.remove('active');
+    }
+}
+
+// Save navigation state to localStorage
+function saveNavigationState() {
+    try {
+        // Save only folder IDs and names for reconstruction
+        const state = {
+            path: currentPath.map(folder => ({
+                id: folder.id,
+                name: folder.name
+            }))
+        };
+        localStorage.setItem(NAVIGATION_STATE_KEY, JSON.stringify(state));
+    } catch (e) {
+        console.error('Error saving navigation state:', e);
+    }
+}
+
+// Restore navigation state from localStorage
+function restoreNavigationState() {
+    try {
+        const stored = localStorage.getItem(NAVIGATION_STATE_KEY);
+        if (stored) {
+            const state = JSON.parse(stored);
+            if (state.path && Array.isArray(state.path)) {
+                // Reconstruct folder objects from stored IDs
+                currentPath = state.path.map(folderData => {
+                    const folder = bookmarks.find(b => b.id === folderData.id && b.type === 'folder');
+                    if (folder) {
+                        return {
+                            id: folder.id,
+                            name: folder.name || folderData.name
+                        };
+                    }
+                    return null;
+                }).filter(f => f !== null); // Remove any folders that no longer exist
+            }
+        }
+    } catch (e) {
+        console.error('Error restoring navigation state:', e);
+        currentPath = [];
+    }
 }
 
 // Populate parent select dropdown
@@ -453,6 +826,31 @@ function isDescendant(itemId, ancestorId) {
     return isDescendant(item.parent, ancestorId);
 }
 
+// Reorder bookmark within the same parent
+function reorderBookmark(draggedItem, targetItem, parentId) {
+    // Get all items in the same parent, sorted by current order
+    const siblings = getItemsByParent(parentId);
+    
+    // Remove dragged item from siblings
+    const siblingsWithoutDragged = siblings.filter(s => s.id !== draggedItem.id);
+    
+    // Find target index
+    const targetIndex = siblingsWithoutDragged.findIndex(s => s.id === targetItem.id);
+    
+    if (targetIndex === -1) return;
+    
+    // Insert dragged item at target position
+    siblingsWithoutDragged.splice(targetIndex, 0, draggedItem);
+    
+    // Update order for all siblings
+    siblingsWithoutDragged.forEach((sibling, index) => {
+        sibling.order = index;
+    });
+    
+    // Ensure parent is set
+    draggedItem.parent = parentId;
+}
+
 // Render bookmark tree in management modal
 function renderBookmarkTree() {
     const tree = document.getElementById('bookmarkTree');
@@ -472,7 +870,16 @@ function renderBookmarkTree() {
             if (item.type === 'folder') {
                 content.innerHTML = `<span class="drag-handle">☰</span> <span class="folder-icon">📁</span> <strong>${item.name}</strong>`;
             } else {
-                content.innerHTML = `<span class="drag-handle">☰</span> <span class="bookmark-icon">🔗</span> <a href="${item.url}" target="_blank">${item.name}</a>`;
+                const bookmarkIcon = getBookmarkIcon(item.accessTime);
+                content.innerHTML = `<span class="drag-handle">☰</span> <span class="bookmark-icon">${bookmarkIcon}</span> <a href="${item.url}" target="_blank" data-bookmark-id="${item.id}">${item.name}</a>`;
+                
+                // Track access time when bookmark is clicked in tree view
+                const bookmarkLink = content.querySelector('a[data-bookmark-id]');
+                if (bookmarkLink) {
+                    bookmarkLink.addEventListener('click', () => {
+                        recordBookmarkAccess(item.id);
+                    });
+                }
             }
             
             const actions = document.createElement('div');
@@ -705,7 +1112,12 @@ async function saveBookmarkItem() {
         
         if (!isFolder) {
             newItem.url = url;
+            newItem.accessTime = 0; // Initialize access time for new bookmarks
         }
+        
+        // Set order to append at end of parent's children
+        const siblings = getItemsByParent(parent || '');
+        newItem.order = siblings.length;
         
         bookmarks.push(newItem);
     }
@@ -760,6 +1172,8 @@ function deleteItem(id) {
     
     deleteRecursive(id);
     saveBookmarks();
+    // Save navigation state before rendering
+    saveNavigationState();
     renderNavigation();
     renderBookmarkTree();
 }
@@ -839,12 +1253,15 @@ function parseChromeBookmarks(htmlText) {
                     const name = a.textContent.trim();
                     
                     if (url && name) {
+                        const parentIdForBookmark = currentFolderId || parentId || '';
                         const bookmark = {
                             id: generateId(),
                             name: name,
                             url: url,
                             type: 'bookmark',
-                            parent: parentId || ''
+                            parent: parentIdForBookmark,
+                            accessTime: 0,
+                            order: result.filter(b => b.parent === parentIdForBookmark).length
                         };
                         result.push(bookmark);
                     }
